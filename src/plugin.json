@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "panel",
+  "name": "trackmap",
+  "id": "leonardopivetta-trackmap-panel",
+  "info": {
+    "description": "Displays a map with a path drawed above",
+    "author": {
+      "name": "Leonardo Pivetta",
+      "url": "https://github.com/leonardopivetta"
+    },
+    "keywords": [
+      "map",
+      "route",
+      "race"
+    ],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "Website",
+        "url": "https://github.com/grafana/grafana-starter-panel"
+      },
+      {
+        "name": "License",
+        "url": "https://github.com/grafana/grafana-starter-panel/blob/master/LICENSE"
+      }
+    ],
+    "screenshots": [],
+    "version": "0.1.0",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=7.0.0",
+    "plugins": []
+  }
+}
