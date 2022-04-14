@@ -5,15 +5,17 @@ import {} from '@grafana/ui';
 import mapboxgl, { GeoJSONSource, Map } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-function smooth(input: Array<Array<number>>) {
-  function copy(out: Array<number>, a: Array<number>) {
+function smooth(input: number[][]) {
+  function copy(out: number[], a: number[]) {
     out[0] = a[0];
     out[1] = a[1];
     return out;
   }
   var output = [];
 
-  if (input.length > 0) output.push(copy([0, 0], input[0]));
+  if (input.length > 0) {
+    output.push(copy([0, 0], input[0]));
+  }
   for (var i = 0; i < input.length - 1; i++) {
     var p0 = input[i];
     var p1 = input[i + 1];
@@ -27,7 +29,9 @@ function smooth(input: Array<Array<number>>) {
     output.push(Q);
     output.push(R);
   }
-  if (input.length > 1) output.push(copy([0, 0], input[input.length - 1]));
+  if (input.length > 1) {
+    output.push(copy([0, 0], input[input.length - 1]));
+  }
   return output;
 }
 
@@ -45,8 +49,7 @@ const sampleCoordinates = [
   [12.55516, 45.99137],
 ];
 
-
-function setMapData(map: Map, data: Array<Array<number>>) {
+function setMapData(map: Map, data: number[][]) {
   (map.getSource('route') as GeoJSONSource).setData({
     type: 'Feature',
     properties: {},
@@ -75,7 +78,6 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
   //   mapboxgl.accessToken = options.apiKey;
   // }, [options]);
 
-
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<Map | undefined>(undefined);
   const [lng] = useState(12.54966);
@@ -83,15 +85,15 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
   const [zoom] = useState(8);
   useLayoutEffect(() => {
     // if (map.current) return;
-    try{
-    map.current = new Map({
-      container: mapContainer.current?.id ?? '',
-      style: 'mapbox://styles/mapbox/dark-v10',
-      center: [lng, lat],
-      zoom: zoom,
-      accessToken: options.apiKey,
-    });
-    }catch(e){
+    try {
+      map.current = new Map({
+        container: mapContainer.current?.id ?? '',
+        style: 'mapbox://styles/mapbox/dark-v10',
+        center: [lng, lat],
+        zoom: zoom,
+        accessToken: options.apiKey,
+      });
+    } catch (e) {
       throw Error('Invalid Mapbox API Key');
     }
     map.current!.on('load', () => {
@@ -125,10 +127,9 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
     });
     const coordinates = smooth(sampleCoordinates);
     function animate(timestamp: number) {
-
       // const lng0 = coordinates[Math.round(timestamp/500)%coordinates.length]
 
-      const pos = Math.floor(timestamp/500)%coordinates.length;
+      const pos = Math.floor(timestamp / 500) % coordinates.length;
 
       // const pos = 0;
       const lng0 = coordinates[pos][0];
@@ -152,17 +153,17 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
       marker.remove();
       map.current?.remove();
     };
-  }, [mapContainer, map, options]);
+  }, [mapContainer, map, options, data.series, lat, lng, zoom]);
 
   // Resize the map on panel resize
-  useEffect(()=>{
+  useEffect(() => {
     map.current?.resize();
   }, [map, width, height]);
 
   return (
     <div
       id="map"
-      style={{ height: height, width: width}}
+      style={{ height: height, width: width }}
       ref={mapContainer}
       onClick={() => setMapData(map.current!, sampleCoordinates)}
     ></div>
