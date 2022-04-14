@@ -1,75 +1,86 @@
 import React, { useRef, useLayoutEffect, useState, useEffect } from 'react';
-import { DataFrame, DataTransformerID, PanelProps, transformDataFrame } from '@grafana/data';
-import { Options } from 'types';
+import {
+  DataFrame,
+  DataHoverClearEvent,
+  DataHoverEvent,
+  DataTransformerID,
+  Field,
+  FieldCalcs,
+  getDataFrameRow,
+  PanelProps,
+  transformDataFrame,
+  Vector,
+} from '@grafana/data';
+import { CalculatedData, Options } from 'types';
 import {} from '@grafana/ui';
-import mapboxgl, { GeoJSONSource, Map } from 'mapbox-gl';
+import mapboxgl, { GeoJSONSource, Map, Marker } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-
-function smooth(input: number[][]) {
-  function copy(out: number[], a: number[]) {
-    out[0] = a[0];
-    out[1] = a[1];
-    return out;
-  }
-  var output = [];
-
-  if (input.length > 0) {
-    output.push(copy([0, 0], input[0]));
-  }
-  for (var i = 0; i < input.length - 1; i++) {
-    var p0 = input[i];
-    var p1 = input[i + 1];
-    var p0x = p0[0],
-      p0y = p0[1],
-      p1x = p1[0],
-      p1y = p1[1];
-
-    var Q = [0.75 * p0x + 0.25 * p1x, 0.75 * p0y + 0.25 * p1y];
-    var R = [0.25 * p0x + 0.75 * p1x, 0.25 * p0y + 0.75 * p1y];
-    output.push(Q);
-    output.push(R);
-  }
-  if (input.length > 1) {
-    output.push(copy([0, 0], input[input.length - 1]));
-  }
-  return output;
-}
+import smooth from 'utils/smooth';
+import getLngLatCalcs from 'utils/calculateFields';
 
 interface Props extends PanelProps<Options> {}
 
-const sampleCoordinates = [
-  [12.55516, 45.99137, 10],
-  [12.65406, 45.96577, 20],
-  [12.72962, 45.8979, 0],
-  [12.69528, 45.85102, 5],
-  [12.54966, 45.82134, 2],
-  [12.527, 45.824, 10],
-  [12.45075, 45.90077, 20],
-  [12.53043, 45.91512, 14],
-  [12.55516, 45.99137, 10],
-];
+function setUpBaseMapBox(map: Map, options: Options) {
+  map.addSource('route', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: [],
+      },
+    },
+  });
 
-function setMapData(map: Map, data: number[][]) {
+  map.addLayer({
+    id: 'route',
+    type: 'line',
+    source: 'route',
+    layout: {
+      'line-join': 'round',
+      'line-cap': 'round',
+    },
+    paint: {
+      'line-color': 'white',
+      'line-width': 8,
+    },
+  });
+}
+
+function setMapData(
+  map: Map,
+  lonSeries: Field<any, Vector<any>>,
+  latSeries: Field<any, Vector<any>>,
+  lonCalcs: FieldCalcs,
+  latCalcs: FieldCalcs
+) {
+  function transpose(data: number[][]) {
+    return data[0].map((_, i) => data.map((row) => row[i]));
+  }
+
+  // Applies the data to the source
   (map.getSource('route') as GeoJSONSource).setData({
     type: 'Feature',
     properties: {},
     geometry: {
       type: 'LineString',
-      coordinates: smooth(sampleCoordinates),
+      coordinates: smooth(transpose([lonSeries.values.toArray(), latSeries.values.toArray()])),
     },
   });
+
+  // Fits the map to show all the route
+  map.fitBounds([
+    [lonCalcs['min'], latCalcs['min']],
+    [lonCalcs['max'], latCalcs['max']],
+  ]);
 }
 
-function dataSeriesToCoordinates(data: DataFrame[]) {
-  transformDataFrame([{ id: DataTransformerID.merge, options: {} }], data).subscribe((a) => {
-    // console.log(a[0]);
-    console.log(a[0].fields.find((f) => f.name.match('/[Ll]at/g')));
-    console.table([a[0].fields[0].values.toArray(), a[0].fields[1].values.toArray(), a[0].fields[2].values.toArray()]);
+function mergeDataframes(data: DataFrame[], setMerged: (data: DataFrame) => void) {
+  transformDataFrame([{ id: DataTransformerID.merge, options: {} }], data).subscribe((out) => {
+    if (out.length === 0) return;
+    setMerged(out[0]);
   });
-  // const x = mergeResults(data);
-  // console.log(x);
-  // x.forEach(frame => console.log);
-  // dataFrameToJSON(mergeResults(data) ?? data[0]);
 }
 
 export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, eventBus }) => {
@@ -77,88 +88,83 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
     throw Error('TrackMapPanel: eyou need at least 2 data series');
   }
 
-  console.log(options.lat_name, options.lon_name);
+  // Merged data from latitude and longitude series (and possibily also value);
+  const [mergedDataFrame, setMergedDataFrame] = useState<DataFrame>();
+
+  // Marker to show the current hovered point
+  const marker = new Marker({
+    color: 'blue',
+    draggable: false,
+  });
+
+  eventBus.subscribe(DataHoverEvent, (event) => {
+    if (!mergedDataFrame) return;
+    if (!map.current) return;
+    if (!event.payload.rowIndex) return;
+
+    // indexes of Value
+    let indexOfValue = undefined;
+    if (options.has_value) {
+      indexOfValue = mergedDataFrame.fields.findIndex((i) => i.name === options.value_name);
+    }
+    const indexOfLon = mergedDataFrame.fields.findIndex((i) => i.name === options.lon_name);
+    const indexOfLat = mergedDataFrame.fields.findIndex((i) => i.name === options.lat_name);
+
+    const row = getDataFrameRow(mergedDataFrame, event.payload.rowIndex);
+
+    marker.setLngLat([row[indexOfLon], row[indexOfLat]]);
+    if (options.has_value) {
+      marker.setPopup(new mapboxgl.Popup({ offset: 25, closeButton: false }).setText(`${row[indexOfValue!]}`));
+      marker.togglePopup();
+    }
+
+    marker.addTo(map.current);
+  });
+
+  eventBus.subscribe(DataHoverClearEvent, (event) => {
+    marker.remove();
+  });
 
   // Refresh the apiKey
   useEffect(() => {
-    console.log(options);
     mapboxgl.accessToken = options.apiKey;
   }, [options]);
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<Map | undefined>(undefined);
-  const [lng] = useState(12.54966);
-  const [lat] = useState(45.82134);
-  const [zoom] = useState(8);
+  const [calcData, setCalcData] = useState<CalculatedData>();
+
+  // Updates the map data
+  useEffect(() => {
+    if (!map.current) return;
+    if (!mergedDataFrame) return;
+    if (!calcData) return;
+    setMapData(map.current, calcData.lonSeries, calcData.latSeries, calcData.lonCalcs, calcData.latCalcs);
+  }, [map, mergedDataFrame, options, calcData]);
+
+  // Destructures the data merged and does all the calculations
+  useEffect(() => {
+    if (!mergedDataFrame) return;
+    setCalcData(getLngLatCalcs(mergedDataFrame, options));
+  }, [mergedDataFrame, options]);
+
+  // Creates the map, applies the base styling (layers and sources) and merges the data from the series
   useLayoutEffect(() => {
     map.current = new Map({
       container: mapContainer.current?.id ?? '',
       style: options.style,
-      center: [lng, lat],
-      zoom: zoom,
       accessToken: options.apiKey,
     });
     map.current!.on('load', () => {
-      map.current!.addSource('route', {
-        type: 'geojson',
-        lineMetrics: true,
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'LineString', coordinates: [] },
-        },
-      });
-      setMapData(map.current!, sampleCoordinates);
-      map.current!.addLayer({
-        id: 'route',
-        type: 'line',
-        source: 'route',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': 'red',
-          'line-width': 8,
-          'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, '#fbb03b', 0.5, '#1c1c1c', 1, '#fbb03b'],
-        },
-      });
+      setUpBaseMapBox(map.current!, options);
+      mergeDataframes(data.series, setMergedDataFrame);
     });
-    dataSeriesToCoordinates(data.series);
 
-    const marker = new mapboxgl.Marker({
-      color: 'blue',
-      draggable: false,
-    });
-    const coordinates = smooth(sampleCoordinates);
-    function animate(timestamp: number) {
-      // const lng0 = coordinates[Math.round(timestamp/500)%coordinates.length]
-
-      const pos = Math.floor(timestamp / 500) % coordinates.length;
-
-      // const pos = 0;
-      const lng0 = coordinates[pos][0];
-      const lng1 = coordinates[(pos + 1) % coordinates.length][0];
-
-      const lat0 = coordinates[pos][1];
-      const lat1 = coordinates[(pos + 1) % coordinates.length][1];
-
-      const lng = lng0 + ((lng1 - lng0) * (timestamp % 500)) / 500;
-      const lat = lat0 + ((lat1 - lat0) * (timestamp % 500)) / 500;
-
-      marker.setLngLat([lng, lat]);
-      requestAnimationFrame(animate);
-    }
-    marker.setLngLat([sampleCoordinates[0][0], sampleCoordinates[0][1]]).addTo(map.current);
-    requestAnimationFrame(animate);
-    // marker.addTo(map.current);
-    map.current.resize();
     return () => {
       // Cleanup
-      marker.remove();
       map.current?.remove();
     };
-  }, [mapContainer, map, options, data.series, lat, lng, zoom]);
+  }, [mapContainer, map, options, data.series]);
 
   // Resize the map on panel resize
   useEffect(() => {
