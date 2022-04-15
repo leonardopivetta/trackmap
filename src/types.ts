@@ -7,6 +7,8 @@ export interface Options {
   has_value: boolean;
   value_name: string;
   style: string;
+  min_color: string;
+  max_color: string;
 }
 
 export interface CalculatedData {

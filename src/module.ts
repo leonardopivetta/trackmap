@@ -24,6 +24,7 @@ export const plugin = new PanelPlugin<Options>(TrackMapPanel).setPanelOptions((b
       path: 'has_value',
       name: 'Has value',
       description: 'Check if the map should have a value',
+      category: ['Value'],
     })
     .addFieldNamePicker({
       showIf: (currOptions, data) => {
@@ -39,5 +40,25 @@ export const plugin = new PanelPlugin<Options>(TrackMapPanel).setPanelOptions((b
       name: 'Style',
       description: 'Insert the style for the map',
       defaultValue: 'mapbox://styles/mapbox/dark-v10',
+    })
+    .addColorPicker({
+      showIf: (currOptions, data) => {
+        return currOptions.has_value;
+      },
+      path: 'min_color',
+      name: 'Min color',
+      description: 'Select the color for the minimum value',
+      defaultValue: '#00ff00',
+      category: ['Value'],
+    })
+    .addColorPicker({
+      showIf: (currOptions, data) => {
+        return currOptions.has_value;
+      },
+      path: 'max_color',
+      name: 'Max color',
+      description: 'Select the color for the maximum value',
+      defaultValue: '#ff0000',
+      category: ['Value'],
     });
 });
