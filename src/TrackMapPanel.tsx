@@ -15,40 +15,11 @@ import { Options } from 'types';
 import {} from '@grafana/ui';
 import mapboxgl, { Map, Marker } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import calcGradients from 'utils/calcGradient';
+import getLngLatCalcs from 'utils/getLngLatCalcs';
 import smooth from 'utils/smooth';
-import getLngLatCalcs from 'utils/calculateFields';
 
 interface Props extends PanelProps<Options> {}
-
-function calcGradients(data: number[], options: Options) {
-  const output = [];
-  const min = data.reduce((p, i) => Math.min(p, i), Infinity);
-  const max = data.reduce((p, i) => Math.max(p, i), -Infinity);
-  const hex = function (x: number): string {
-    let a = x.toString(16);
-    return a.length == 1 ? '0' + x : a;
-  };
-  const min_color = options.min_color.substring(1);
-  const max_color = options.max_color.substring(1);
-  for (let i = 0; i < data.length; i++) {
-    output.push(i / data.length);
-    let ratio = (data[i] - min) / max;
-    let r = Math.ceil(
-      parseInt(min_color.substring(0, 2), 16) * ratio + parseInt(max_color.substring(0, 2), 16) * (1 - ratio)
-    );
-    let g = Math.ceil(
-      parseInt(min_color.substring(2, 4), 16) * ratio + parseInt(max_color.substring(2, 4), 16) * (1 - ratio)
-    );
-    let b = Math.ceil(
-      parseInt(min_color.substring(4, 6), 16) * ratio + parseInt(max_color.substring(4, 6), 16) * (1 - ratio)
-    );
-
-    var middle = `#${hex(r)}${hex(g)}${hex(b)}`;
-
-    output.push(middle.substring(0, 7));
-  }
-  return output;
-}
 
 function setUpBaseMapBox(map: Map) {
   if (!map.getSource('route')) {
@@ -115,10 +86,15 @@ function setMapData(
   }
 
   // Fits the map to show all the route
-  map.fitBounds([
-    [lonCalcs['min'], latCalcs['min']],
-    [lonCalcs['max'], latCalcs['max']],
-  ]);
+  map.fitBounds(
+    [
+      [lonCalcs['min'], latCalcs['min']],
+      [lonCalcs['max'], latCalcs['max']],
+    ],
+    {
+      padding: 20,
+    }
+  );
 }
 
 function mergeDataframes(data: DataFrame[], setMerged: (data: DataFrame) => void) {
@@ -128,7 +104,7 @@ function mergeDataframes(data: DataFrame[], setMerged: (data: DataFrame) => void
   });
 }
 
-export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, eventBus }) => {
+export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, eventBus, timeRange }) => {
   if (data.series.length < 2) {
     throw Error('TrackMapPanel: eyou need at least 2 data series');
   }
@@ -155,12 +131,12 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
   }, [data.series]);
 
   // Destructures the data merged and does all the calculations
-  useEffect(() => {
-    if (!mergedDataFrame) return;
-    if (!map.current) return;
-    // setCalcData(getLngLatCalcs(mergedDataFrame, options));
-    if (!options.has_value) return;
-  }, [mergedDataFrame, options, map]);
+  // useEffect(() => {
+  //   if (!mergedDataFrame) return;
+  //   if (!map.current) return;
+  //   // setCalcData(getLngLatCalcs(mergedDataFrame, options));
+  //   if (!options.has_value) return;
+  // }, [mergedDataFrame, options, map]);
 
   // Creates the map, applies the base styling (layers and sources) and merges the data from the series
   useLayoutEffect(() => {
@@ -209,6 +185,12 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
       color: 'blue',
       draggable: false,
     });
+
+    useEffect(() => {
+      return () => {
+        marker.remove();
+      };
+    }, [timeRange]);
 
     eventBus.subscribe(DataHoverEvent, (event) => {
       if (!mergedDataFrame) return;
