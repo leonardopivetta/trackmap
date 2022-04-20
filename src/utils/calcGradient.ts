@@ -6,7 +6,7 @@ function calcGradients(data: number[], options: Options) {
   const max = data.reduce((p, i) => Math.max(p, i), -Infinity);
   const hex = function (x: number): string {
     let a = x.toString(16);
-    return a.length == 1 ? '0' + x : a;
+    return a.length === 1 ? '0' + x : a;
   };
   const min_color = options.min_color.substring(1);
   const max_color = options.max_color.substring(1);

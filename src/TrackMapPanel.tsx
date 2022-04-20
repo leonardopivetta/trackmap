@@ -54,10 +54,12 @@ function setUpBaseMapBox(map: Map) {
 }
 
 // Updates the gradient based on the array passed
-function setMapGradient(map: Map, gradient: (string | number)[]) {
+function setMapGradient(map: Map, gradient: Array<string | number>) {
   const paint = ['interpolate', ['linear'], ['line-progress'], ...gradient];
   const layer = map.getLayer('route');
-  if (!layer) return;
+  if (!layer) {
+    return;
+  }
   map.setPaintProperty(layer.id, 'line-gradient', paint);
 }
 
@@ -68,7 +70,9 @@ function setMapData(
   lonCalcs: FieldCalcs,
   latCalcs: FieldCalcs
 ) {
-  if (!map.getSource('route')) throw Error('No source found');
+  if (!map.getSource('route')) {
+    throw Error('No source found');
+  }
   function transpose(data: number[][]) {
     return data[0].map((_, i) => data.map((row) => row[i]));
   }
@@ -99,7 +103,9 @@ function setMapData(
 
 function mergeDataframes(data: DataFrame[], setMerged: (data: DataFrame) => void) {
   transformDataFrame([{ id: DataTransformerID.merge, options: {} }], data).subscribe((out) => {
-    if (out.length === 0) return;
+    if (out.length === 0) {
+      return;
+    }
     setMerged(out[0]);
   });
 }
@@ -130,17 +136,11 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
     mergeDataframes(data.series, setMergedDataFrame);
   }, [data.series]);
 
-  // Destructures the data merged and does all the calculations
-  // useEffect(() => {
-  //   if (!mergedDataFrame) return;
-  //   if (!map.current) return;
-  //   // setCalcData(getLngLatCalcs(mergedDataFrame, options));
-  //   if (!options.has_value) return;
-  // }, [mergedDataFrame, options, map]);
-
   // Creates the map, applies the base styling (layers and sources) and merges the data from the series
   useLayoutEffect(() => {
-    if (!mapContainer.current) throw Error('No map container found');
+    if (!mapContainer.current) {
+      throw Error('No map container found');
+    }
     map.current = new Map({
       container: mapContainer.current.id,
     });
@@ -159,19 +159,21 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
   }, [options.style]);
 
   useEffect(() => {
-    if (!map.current) return;
-    if (!loaded) return;
-    if (!mergedDataFrame) return;
+    if (!map.current || !loaded || !mergedDataFrame) {
+      return;
+    }
     setUpBaseMapBox(map.current);
     let _calcData = getLngLatCalcs(mergedDataFrame!, options);
     setMapData(map.current!, _calcData.lonSeries, _calcData.latSeries, _calcData.lonCalcs, _calcData.latCalcs);
     if (options.has_value) {
       let valueSeries = mergedDataFrame.fields.find((i) => i.name === options.value_name);
-      if (!valueSeries) throw Error("TrackMapPanel: Can't find the value series");
+      if (!valueSeries) {
+        throw Error("TrackMapPanel: Can't find the value series");
+      }
       let gradientArray = calcGradients(valueSeries.values.toArray(), options);
       setMapGradient(map.current, gradientArray);
     }
-  }, [map.current, mergedDataFrame, options, loaded]);
+  }, [map, mergedDataFrame, options, loaded]);
 
   // Resize the map on panel resize
   useEffect(() => {
@@ -186,16 +188,10 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
       draggable: false,
     });
 
-    useEffect(() => {
-      return () => {
-        marker.remove();
-      };
-    }, [timeRange]);
-
     eventBus.subscribe(DataHoverEvent, (event) => {
-      if (!mergedDataFrame) return;
-      if (!map.current) return;
-      if (!event.payload.rowIndex) return;
+      if (!mergedDataFrame || !map.current || !event.payload.rowIndex) {
+        return;
+      }
 
       // indexes of Value
       let indexOfValue = undefined;
