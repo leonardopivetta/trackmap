@@ -76,6 +76,9 @@ function setMapData(
   function transpose(data: number[][]) {
     return data[0].map((_, i) => data.map((row) => row[i]));
   }
+  if(!lonSeries?.values.length || !latSeries?.values.length) {
+    return;
+  }
   // Applies the data to the source
   const source = map.getSource('route');
   if (source?.type === 'geojson') {
@@ -111,15 +114,51 @@ function mergeDataframes(data: DataFrame[], setMerged: (data: DataFrame) => void
 }
 
 export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, eventBus, timeRange }) => {
-  if (data.series.length < 2) {
-    throw Error('TrackMapPanel: eyou need at least 2 data series');
-  }
+  // if (data.series.length < 2) {
+  //   throw Error('TrackMapPanel: eyou need at least 2 data series');
+  // }
 
   // Merged data from latitude and longitude series (and possibily also value);
   const [mergedDataFrame, setMergedDataFrame] = useState<DataFrame>();
 
   // Marker to show the current hovered point
-  setUpDataHover();
+  useEffect(() => {
+    const marker = new Marker({
+      color: options.marker_color,
+      draggable: false,
+    });
+
+    eventBus.subscribe(DataHoverEvent, (event) => {
+      if (!mergedDataFrame || !map.current || !event.payload.rowIndex) {
+        return;
+      }
+
+      // indexes of Value
+      let indexOfValue = undefined;
+      if (options.has_value) {
+        indexOfValue = mergedDataFrame.fields.findIndex((i) => i.name === options.value_name);
+      }
+      const indexOfLon = mergedDataFrame.fields.findIndex((i) => i.name === options.lon_name);
+      const indexOfLat = mergedDataFrame.fields.findIndex((i) => i.name === options.lat_name);
+
+      const row = getDataFrameRow(mergedDataFrame, event.payload.rowIndex);
+
+      marker.setLngLat([row[indexOfLon], row[indexOfLat]]);
+      if (options.has_value) {
+        marker.setPopup(new mapboxgl.Popup({ offset: 25, closeButton: false }).setText(`${row[indexOfValue!]}`));
+        marker.togglePopup();
+      }
+      marker.addTo(map.current);
+    });
+
+    eventBus.subscribe(DataHoverClearEvent, (event) => {
+      marker.remove();
+    });
+    return ()=>{
+      eventBus.removeAllListeners();
+      marker.remove();
+    }
+  }, [options.marker_color, mergedDataFrame]);
 
   // Refresh the apiKey
   useEffect(() => {
@@ -141,6 +180,7 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
     if (!mapContainer.current) {
       throw Error('No map container found');
     }
+    if(map.current) return;
     map.current = new Map({
       container: mapContainer.current.id,
     });
@@ -168,9 +208,10 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
     if (options.has_value) {
       let valueSeries = mergedDataFrame.fields.find((i) => i.name === options.value_name);
       if (!valueSeries) {
-        throw Error("TrackMapPanel: Can't find the value series");
+        // throw Error("TrackMapPanel: Can't find the value series");
+        return;
       }
-      let gradientArray = calcGradients(valueSeries.values.toArray(), options);
+      const gradientArray = calcGradients(valueSeries.values.toArray(), options);
       setMapGradient(map.current, gradientArray);
     }
   }, [map, mergedDataFrame, options, loaded]);
@@ -182,38 +223,4 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
 
   return <div id="map" style={{ height: height, width: width }} ref={mapContainer}></div>;
 
-  function setUpDataHover() {
-    const marker = new Marker({
-      color: 'blue',
-      draggable: false,
-    });
-
-    eventBus.subscribe(DataHoverEvent, (event) => {
-      if (!mergedDataFrame || !map.current || !event.payload.rowIndex) {
-        return;
-      }
-
-      // indexes of Value
-      let indexOfValue = undefined;
-      if (options.has_value) {
-        indexOfValue = mergedDataFrame.fields.findIndex((i) => i.name === options.value_name);
-      }
-      const indexOfLon = mergedDataFrame.fields.findIndex((i) => i.name === options.lon_name);
-      const indexOfLat = mergedDataFrame.fields.findIndex((i) => i.name === options.lat_name);
-
-      const row = getDataFrameRow(mergedDataFrame, event.payload.rowIndex);
-
-      marker.setLngLat([row[indexOfLon], row[indexOfLat]]);
-      if (options.has_value) {
-        marker.setPopup(new mapboxgl.Popup({ offset: 25, closeButton: false }).setText(`${row[indexOfValue!]}`));
-        marker.togglePopup();
-      }
-
-      marker.addTo(map.current);
-    });
-
-    eventBus.subscribe(DataHoverClearEvent, (event) => {
-      marker.remove();
-    });
-  }
 };

@@ -48,7 +48,7 @@ export const plugin = new PanelPlugin<Options>(TrackMapPanel).setPanelOptions((b
       path: 'min_color',
       name: 'Min color',
       description: 'Select the color for the minimum value',
-      defaultValue: '#00ff00',
+      defaultValue: 'green',
       category: ['Value'],
     })
     .addColorPicker({
@@ -58,7 +58,13 @@ export const plugin = new PanelPlugin<Options>(TrackMapPanel).setPanelOptions((b
       path: 'max_color',
       name: 'Max color',
       description: 'Select the color for the maximum value',
-      defaultValue: '#ff0000',
+      defaultValue: 'red',
       category: ['Value'],
+    })
+    .addColorPicker({
+      path: 'marker_color',
+      name: 'Marker color',
+      description: 'Select the color for the marker',
+      defaultValue: 'green'
     });
 });

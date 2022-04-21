@@ -9,6 +9,7 @@ export interface Options {
   style: string;
   min_color: string;
   max_color: string;
+  marker_color: string;
 }
 
 export interface CalculatedData {
