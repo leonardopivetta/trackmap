@@ -54,13 +54,16 @@ function setUpBaseMapBox(map: Map) {
 }
 
 // Updates the gradient based on the array passed
-function setMapGradient(map: Map, gradient: Array<string | number>) {
-  const paint = ['interpolate', ['linear'], ['line-progress'], ...gradient];
+function setMapGradient(map: Map, gradient?: Array<string | number>) {
   const layer = map.getLayer('route');
   if (!layer) {
     return;
   }
-  map.setPaintProperty(layer.id, 'line-gradient', paint);
+  map.setPaintProperty(
+    layer.id,
+    'line-gradient',
+    gradient ? ['interpolate', ['linear'], ['line-progress'], ...gradient] : null
+  );
 }
 
 function setMapData(
@@ -76,7 +79,7 @@ function setMapData(
   function transpose(data: number[][]) {
     return data[0].map((_, i) => data.map((row) => row[i]));
   }
-  if(!lonSeries?.values.length || !latSeries?.values.length) {
+  if (!lonSeries?.values.length || !latSeries?.values.length) {
     return;
   }
   // Applies the data to the source
@@ -113,11 +116,7 @@ function mergeDataframes(data: DataFrame[], setMerged: (data: DataFrame) => void
   });
 }
 
-export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, eventBus, timeRange }) => {
-  // if (data.series.length < 2) {
-  //   throw Error('TrackMapPanel: eyou need at least 2 data series');
-  // }
-
+export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, eventBus }) => {
   // Merged data from latitude and longitude series (and possibily also value);
   const [mergedDataFrame, setMergedDataFrame] = useState<DataFrame>();
 
@@ -154,11 +153,11 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
     eventBus.subscribe(DataHoverClearEvent, (event) => {
       marker.remove();
     });
-    return ()=>{
+    return () => {
       eventBus.removeAllListeners();
       marker.remove();
-    }
-  }, [options.marker_color, mergedDataFrame]);
+    };
+  }, [options, mergedDataFrame, eventBus]);
 
   // Refresh the apiKey
   useEffect(() => {
@@ -177,13 +176,13 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
 
   // Creates the map, applies the base styling (layers and sources) and merges the data from the series
   useLayoutEffect(() => {
-    if (!mapContainer.current) {
-      throw Error('No map container found');
+    if (!mapContainer.current || map.current) {
+      return;
     }
-    if(map.current) return;
     map.current = new Map({
       container: mapContainer.current.id,
     });
+    // map.current.setStyle(options.style);
     setLoaded(false);
     map.current.on('load', () => {
       setLoaded(true);
@@ -192,7 +191,7 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
       // Cleanup
       map.current?.remove();
     };
-  }, [mapContainer]);
+  }, [mapContainer, options.style]);
 
   useEffect(() => {
     map.current?.setStyle(options.style);
@@ -203,7 +202,7 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
       return;
     }
     setUpBaseMapBox(map.current);
-    let _calcData = getLngLatCalcs(mergedDataFrame!, options);
+    const _calcData = getLngLatCalcs(mergedDataFrame!, options);
     setMapData(map.current!, _calcData.lonSeries, _calcData.latSeries, _calcData.lonCalcs, _calcData.latCalcs);
     if (options.has_value) {
       let valueSeries = mergedDataFrame.fields.find((i) => i.name === options.value_name);
@@ -213,6 +212,8 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
       }
       const gradientArray = calcGradients(valueSeries.values.toArray(), options);
       setMapGradient(map.current, gradientArray);
+    } else {
+      setMapGradient(map.current, undefined);
     }
   }, [map, mergedDataFrame, options, loaded]);
 
@@ -222,5 +223,4 @@ export const TrackMapPanel: React.FC<Props> = ({ options, data, width, height, e
   }, [map, width, height]);
 
   return <div id="map" style={{ height: height, width: width }} ref={mapContainer}></div>;
-
 };
