@@ -65,6 +65,6 @@ export const plugin = new PanelPlugin<Options>(TrackMapPanel).setPanelOptions((b
       path: 'marker_color',
       name: 'Marker color',
       description: 'Select the color for the marker',
-      defaultValue: 'green'
+      defaultValue: 'green',
     });
 });

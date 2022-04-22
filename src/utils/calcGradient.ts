@@ -20,12 +20,12 @@ function calcGradients(data: number[], options: Options) {
     .split('(')[1]
     .split(')')[0]
     .split(',')
-    .map((x) => parseInt(x.trim()));
+    .map((x) => parseInt(x.trim(), 10));
   const computedMax = computeColor(options.max_color)
     .split('(')[1]
     .split(')')[0]
     .split(',')
-    .map((x) => parseInt(x.trim()));
+    .map((x) => parseInt(x.trim(), 10));
 
   for (let i = 0; i < data.length; i++) {
     output.push(i / data.length);
@@ -33,8 +33,6 @@ function calcGradients(data: number[], options: Options) {
     const r = Math.ceil(computedMin[0] * ratio + computedMax[0] * (1 - ratio));
     const g = Math.ceil(computedMin[1] * ratio + computedMax[1] * (1 - ratio));
     const b = Math.ceil(computedMin[2] * ratio + computedMax[2] * (1 - ratio));
-    // console.log(r, g, b);
-    // console.log(hex(r), hex(g), hex(b));
     const middle = `#${hex(r)}${hex(g)}${hex(b)}`;
 
     output.push(middle.substring(0, 7));
